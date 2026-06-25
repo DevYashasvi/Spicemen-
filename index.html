@@ -3,9 +3,22 @@
 <head>
 <meta charset="UTF-8">
 <title>Specimen Match — A Memory Game</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#2B2620">
+<meta name="description" content="A vintage curio-cabinet memory matching game.">
+
+<!-- iOS install support -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Specimen Match">
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<!-- PWA manifest + icons, all inlined as data URIs so the whole app is one file -->
+<link rel="manifest" id="manifestLink">
+<link rel="icon" id="iconLink" type="image/svg+xml">
+<link rel="apple-touch-icon" id="appleIconLink">
 <style>
   :root{
     --paper:#F2EBDD;
@@ -528,6 +541,92 @@
   resetBtn.addEventListener('click', resetGame);
 
   render();
+})();
+</script>
+
+<script>
+/* ---------- PWA bootstrap: icon, manifest, service worker — all inline ---------- */
+(function(){
+
+  // 1) App icon as an SVG data URI (vintage stamp/compass mark on card-back brown)
+  const iconSVG = `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+      <rect width="512" height="512" rx="96" fill="#5C4A3A"/>
+      <rect x="40" y="40" width="432" height="432" rx="64" fill="none" stroke="#C9A24B" stroke-width="6" opacity="0.55"/>
+      <circle cx="256" cy="256" r="120" fill="none" stroke="#C9A24B" stroke-width="10" opacity="0.85"/>
+      <line x1="256" y1="150" x2="256" y2="190" stroke="#F2EBDD" stroke-width="10" stroke-linecap="round"/>
+      <line x1="256" y1="322" x2="256" y2="362" stroke="#F2EBDD" stroke-width="10" stroke-linecap="round"/>
+      <line x1="150" y1="256" x2="190" y2="256" stroke="#F2EBDD" stroke-width="10" stroke-linecap="round"/>
+      <line x1="322" y1="256" x2="362" y2="256" stroke="#F2EBDD" stroke-width="10" stroke-linecap="round"/>
+      <polygon points="256,180 278,256 256,332 234,256" fill="#8C2F1B"/>
+      <circle cx="256" cy="256" r="14" fill="#F2EBDD"/>
+    </svg>`.trim();
+  const iconDataUri = "data:image/svg+xml;base64," + btoa(iconSVG);
+
+  document.getElementById('iconLink').href = iconDataUri;
+  document.getElementById('appleIconLink').href = iconDataUri;
+
+  // 2) Web app manifest, built as a JS object and attached as a data URI
+  const manifest = {
+    name: "Specimen Match — A Memory Game",
+    short_name: "Specimen Match",
+    description: "A vintage curio-cabinet memory matching game.",
+    start_url: ".",
+    scope: ".",
+    display: "standalone",
+    orientation: "portrait",
+    background_color: "#F2EBDD",
+    theme_color: "#2B2620",
+    icons: [
+      { src: iconDataUri, sizes: "512x512", type: "image/svg+xml", purpose: "any maskable" }
+    ]
+  };
+  const manifestBlob = new Blob([JSON.stringify(manifest)], { type: "application/json" });
+  document.getElementById('manifestLink').href = URL.createObjectURL(manifestBlob);
+
+  // 3) Service worker: cache the page shell so it works offline / installs cleanly.
+  //    Built inline as a Blob URL so no separate .js file is needed.
+  if ('serviceWorker' in navigator) {
+    const swSource = `
+      const CACHE_NAME = 'specimen-match-v1';
+      self.addEventListener('install', (event) => {
+        event.waitUntil(
+          caches.open(CACHE_NAME).then((cache) => cache.add(self.registration.scope))
+        );
+        self.skipWaiting();
+      });
+      self.addEventListener('activate', (event) => {
+        event.waitUntil(
+          caches.keys().then((keys) =>
+            Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
+          )
+        );
+        self.clients.claim();
+      });
+      self.addEventListener('fetch', (event) => {
+        if (event.request.method !== 'GET') return;
+        event.respondWith(
+          caches.match(event.request).then((cached) => {
+            if (cached) return cached;
+            return fetch(event.request).then((response) => {
+              const copy = response.clone();
+              caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+              return response;
+            }).catch(() => cached);
+          })
+        );
+      });
+    `;
+    const swBlob = new Blob([swSource], { type: 'application/javascript' });
+    const swUrl = URL.createObjectURL(swBlob);
+
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register(swUrl).catch((err) => {
+        console.warn('Service worker registration failed:', err);
+      });
+    });
+  }
+
 })();
 </script>
 
